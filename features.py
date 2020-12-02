@@ -1,14 +1,14 @@
-import os, math
+import os
+import math
 
 # a list containing all of the author-book text files to be used by the program
 files = []
 
-all_books_count = {}
-# contains a count of which words are used how many times by each author
-auth_counts = {}
-
-all_books_pars = [[],[]]
-all_words_gain = {}
+nauths = 2
+all_books_pars = [[], []]
+all_words_gain = []
+all_words = set()
+threshold = 10
 
 
 def get_files():
@@ -17,12 +17,14 @@ def get_files():
         if f[-4:] == '.txt' and '-' in f:
             files.append(f)
 
+
 def get_author(fname):
     # takes the file name and returns the author name from it
     i = 0
     while fname[i] != '-':
         i += 1
     return fname[:i]
+
 
 def alphas(w):
     # cleans a dirty word. Makes it so every word is all lower cased and no
@@ -32,11 +34,8 @@ def alphas(w):
 
 def process(fname):
 
-    # find which author we are working with and adds it to the auth_counts
-    # dictionary if it's not already in it
+    # find which author we are working with
     auth = get_author(fname)
-    if auth not in auth_counts:
-        auth_counts[auth] = {}
 
     # read in the file as lines
     f = open(fname, mode='r')
@@ -47,9 +46,6 @@ def process(fname):
     # is the number of the paragraph with the first index being the name of the
     # author and the book
     book_pars = [fname]
-
-    # TODO delete?
-    book_count = {}
 
     # p will be the set of words present in a given paragraph. These counts will
     # be stored in book_pars
@@ -86,7 +82,7 @@ def process(fname):
             p.add(w_cleaned)
             # adds the cleaned up words to the set of all words whose gain will
             # be calculated later.
-            all_words_gain[w_cleaned] = 0
+            all_words.add(w_cleaned)
 
     if auth == 'austen':
         all_books_pars[0].append(book_pars)
@@ -94,14 +90,16 @@ def process(fname):
         all_books_pars[1].append(book_pars)
 
 
-def find_gain():
+def calc_U(pr):
+    # calculates the entropy for the
+    if pr[0] == 0 or pr[1] == 0:
+        return 0
+    return -(pr[0] * math.log2(pr[0]) + pr[1] * math.log2(pr[1]))
 
-    # list of all the words
-    all_words = all_words_gain.keys()
-    # number of authors
-    nauths = len(all_books_pars)
+
+def find_gain():
     # total number of paragraphs each author has. index 0 = austen, 1 = shelly
-    npars = [0,0]
+    npars = [0, 0]
 
     for i in range(nauths):
         # sums the total number of paragraphs from each author and stores the
@@ -115,7 +113,7 @@ def find_gain():
     # pr1 is the probability that any one paragraph is written by shelly
     pr1 = npars[1] / sum(npars)
     # all_U is a measure of the entropy for the entire system
-    all_U = -(pr0 * math.log2(pr0) + pr1 * math.log2(pr1))
+    all_U = -(pr1 * math.log2(pr1) + pr0 * math.log2(pr0))
 
     for word in all_words:
         # for every word from all the books scanned in, and for every paragraph
@@ -135,35 +133,74 @@ def find_gain():
                     else:
                         neg_counts[auth] += 1
 
-        # totalp is the total positive, the number of paragraphs from each
+        # total_pos is the total positive, the number of paragraphs from each
         # author containing the word being checked.
-        totalp = sum(pos_counts)
-        # totaln is the total negative, the number of paragraphs from each
+        total_pos = sum(pos_counts)
+        # total_neg is the total negative, the number of paragraphs from each
         # author not containing the word being checked.
-        totaln = sum(neg_counts)
-        # proportion positive
-        prp = [0,0]
-        # proportion negative
-        prn = [0,0]
-
+        total_neg = sum(neg_counts)
+        total_occur = total_pos + total_neg
+        # proportion positive, [Austen, Shelly]
+        prpos = [0, 0]
+        # proportion negative, [Austen, Shelly]
+        prneg = [0, 0]
+        if total_pos < threshold:
+            # the least used words are thrown out. Don't want to divide on a
+            # typo, a word with internal punctuation removed incorrectly, some
+            # weird random word (I don't know, some authors are weird people,
+            # we don't want to split on elvish from Tolkien, right?) and because
+            # I set the default gain of each word to be -1, all words whose gain
+            # has been calculated will be higher.
+            continue
 
         for i in range(nauths):
-            prp[i] = pos_counts[i] / totalp
-            prn[i] = neg_counts[i] / totaln
+            prpos[i] = pos_counts[i] / total_pos
+            prneg[i] = neg_counts[i] / total_neg
 
+        # pos_U is the entropy for paragraphs having the word in it
+        pos_U = calc_U(prpos)
+        # neg_U is the entropy for paragraphs not having the word in it
+        neg_U = calc_U(prneg)
+
+        # prime_U is the of total entropy weighted to the totals.
+        prime_U = (total_pos/total_occur) * pos_U + (total_neg/total_occur) * neg_U
+
+        all_words_gain.append((word, all_U - prime_U))
+
+
+def output():
+    all_words_gain.sort(key=lambda x: x[1], reverse=True)
+    splitting_words = [x[0] for x in all_words_gain[:300]]
+    fout = open("par_words.CSV", "w")
+
+    for auth in range(nauths):
+        for book in range(len(all_books_pars[auth])):
+            title = all_books_pars[auth][book][0][:-4]
+            for par in range(len(all_books_pars[auth][book])):
+                fout.write(title + '.' + str(par))
+                if title[0] == 'a':
+                    fout.write(',0')
+                else:
+                    fout.write(',1')
+                for word in splitting_words:
+                    if word not in all_books_pars[auth][book][par]:
+                        fout.write(',0')
+                    else:
+                        fout.write(',1')
+                fout.write("\n")
+
+    fout.close()
 
 
 def main():
     get_files()
     files.sort()
-
     for fname in files:
         process(fname)
 
     find_gain()
+    output()
+
 
 if __name__ == '__main__':
     main()
-
-# example of psam:
-#
