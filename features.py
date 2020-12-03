@@ -1,6 +1,8 @@
 # !/usr/bin/python3
 # Determines the gains of splitting on a word to determine which author wrote
-# which book. To be used by id3
+# which book. Outputs to par_words.csv a list of paragraphs and whether the 300
+# words with the most gain to split on are present in the corresponding
+# paragraph.
 import os
 import math
 
