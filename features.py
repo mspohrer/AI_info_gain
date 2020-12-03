@@ -1,13 +1,22 @@
+# !/usr/bin/python3
+# Determines the gains of splitting on a word to determine which author wrote
+# which book. To be used by id3
 import os
 import math
 
 # a list containing all of the author-book text files to be used by the program
 files = []
 
+# number of authors, gotta change it if I try to do more authors
 nauths = 2
+# all the books broken up into paragraphs, 0 for Austen, 1 for Shelly
 all_books_pars = [[], []]
+# used keep track of the gains for each word
 all_words_gain = []
+# all the words used by either author
 all_words = set()
+# used as a lower cut off point for total number of uses. Will implement an
+# upper threshold if I have time.
 threshold = 10
 
 
@@ -33,6 +42,11 @@ def alphas(w):
 
 
 def process(fname):
+    # oof! This function is rough, but I'm guessing everyone's is.
+    # It reads in the file as a list of lines then goes through each line,
+    # building paragraphs and removing punctuation as it goes. When the end of
+    # a paragraph is reached, the paragraph is added to the corresponding
+    # author's index of all_books_par
 
     # find which author we are working with
     auth = get_author(fname)
@@ -91,13 +105,17 @@ def process(fname):
 
 
 def calc_U(pr):
-    # calculates the entropy for the
+    # calculates the entropy for the group passed to it.
     if pr[0] == 0 or pr[1] == 0:
+        # if a perfect split, then 0 indicates that.
         return 0
     return -(pr[0] * math.log2(pr[0]) + pr[1] * math.log2(pr[1]))
 
 
 def find_gain():
+    # as the name implies, it finds the gain of splitting on each word according
+    # to the number of paragraphs by each author contain the word.
+
     # total number of paragraphs each author has. index 0 = austen, 1 = shelly
     npars = [0, 0]
 
@@ -126,6 +144,8 @@ def find_gain():
         # contain the word being checked
         neg_counts = [0, 0]
         for auth in range(nauths):
+            # splits the paragraphs into the occurrences of present and not
+            # present for each word for each author
             for book in all_books_pars[auth]:
                 for par in book:
                     if word in par:
@@ -154,6 +174,8 @@ def find_gain():
             continue
 
         for i in range(nauths):
+            # finds the proportions of the usage of a word by authors,
+            # 0 austen, 1 shelly
             prpos[i] = pos_counts[i] / total_pos
             prneg[i] = neg_counts[i] / total_neg
 
@@ -165,15 +187,27 @@ def find_gain():
         # prime_U is the of total entropy weighted to the totals.
         prime_U = (total_pos/total_occur) * pos_U + (total_neg/total_occur) * neg_U
 
+        # add the calculated gain for a word
         all_words_gain.append((word, all_U - prime_U))
 
 
 def output():
+    # Hopefully obviously outputs the paragraph/word info, the first index being
+    # the author-book.paragraph number of that book followed by the author
+    # number, 0 for austen, 1 for shelly, then whether each of the 300 words
+    # with the best gain is present in that paragraph
+
+    # sort the words/gain key value by the gain. The highest gain will be first.
     all_words_gain.sort(key=lambda x: x[1], reverse=True)
+    # simple list building to take the top 300 words by gain
     splitting_words = [x[0] for x in all_words_gain[:300]]
+    # open a file to write to
     fout = open("par_words.CSV", "w")
 
     for auth in range(nauths):
+        # writes to the file, the first index, then the author code, then the
+        # words' presence, 0 for austen 1 for shelly; 0 for not present
+        # 1 for present
         for book in range(len(all_books_pars[auth])):
             title = all_books_pars[auth][book][0][:-4]
             for par in range(len(all_books_pars[auth][book])):
