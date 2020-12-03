@@ -18,6 +18,8 @@ all_words = set()
 # used as a lower cut off point for total number of uses. Will implement an
 # upper threshold if I have time.
 threshold = 10
+# number of words to split on
+nwords = 300
 
 
 def get_files():
@@ -200,7 +202,7 @@ def output():
     # sort the words/gain key value by the gain. The highest gain will be first.
     all_words_gain.sort(key=lambda x: x[1], reverse=True)
     # simple list building to take the top 300 words by gain
-    splitting_words = [x[0] for x in all_words_gain[:300]]
+    splitting_words = [x[0] for x in all_words_gain[:nwords]]
     # open a file to write to
     fout = open("par_words.CSV", "w")
 
